@@ -348,7 +348,7 @@ router.get(
 
 /**
  * POST /instructor/quizzes/:testId/generate
- * Auto-generate test from question bank
+ * Auto-generate test without duplicates
  */
 router.post(
   "/quizzes/:testId/generate",
@@ -376,21 +376,29 @@ router.post(
       if (chapter) filter.chapter = chapter;
       if (difficulty) filter.difficulty = difficulty;
 
-      const questions = await Question.aggregate([
-        { $match: filter },
-        { $sample: { size: Number(count) || 5 } },
+      const availableQuestions = await Question.aggregate([
+        {
+          $match: {
+            ...filter,
+            _id: { $nin: test.questions }, // 🔥 prevent duplicates
+          },
+        },
+        {
+          $sample: { size: Number(count) || 5 },
+        },
       ]);
 
-      if (!questions.length) {
+      if (!availableQuestions.length) {
         return res.status(400).json({
-          error: "Not enough questions available",
+          error: "No more unique questions available for this filter",
         });
       }
 
-      const ids = questions.map((q) => q._id);
+      const ids = availableQuestions.map((q) => q._id);
+
       test.questions.push(...ids);
 
-      const addedMarks = questions.reduce(
+      const addedMarks = availableQuestions.reduce(
         (sum, q) => sum + (q.marks || 1),
         0
       );
@@ -401,7 +409,9 @@ router.post(
 
       res.json({
         message: "Test generated successfully",
-        addedQuestions: questions.length,
+        addedQuestions: availableQuestions.length,
+        remainingPool:
+          "Unique questions only were added",
       });
     } catch (err) {
       res.status(500).json({
