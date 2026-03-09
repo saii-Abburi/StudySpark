@@ -9,7 +9,7 @@ const studentRoutes = require("./routes/student.routes");
 const instructorRoutes = require("./routes/instructor.routes");
 const adminRoutes = require("./routes/admin.routes");
 const helmet = require("helmet");
-const resourceRoutes = require("./routes/resource.routes");
+const resourceRoutes = require("./routes/resource.route");
 
 const rateLimit = require("express-rate-limit");
 
@@ -21,9 +21,9 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin:process.env.FRONTEND_URL,
-    credentials: true, 
-  })
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  }),
 );
 
 const limiter = rateLimit({
