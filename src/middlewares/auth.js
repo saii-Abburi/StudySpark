@@ -6,9 +6,8 @@ const authMiddleware = async (req, res, next) => {
     const token = req.cookies.token;
 
     if (!token) {
-      return res.status(401).json({
-        error: "Authentication required",
-      });
+      console.error('[Auth] Token missing from cookies');
+      return res.status(401).json({ error: "Authentication required" });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -16,9 +15,8 @@ const authMiddleware = async (req, res, next) => {
     const user = await User.findById(decoded._id).select("-password");
 
     if (!user) {
-      return res.status(401).json({
-        error: "User not found",
-      });
+      console.error(`[Auth] User ID ${decoded._id} not found in database`);
+      return res.status(401).json({ error: "User not found" });
     }
 
     if (user.isBlocked) {
@@ -31,9 +29,8 @@ const authMiddleware = async (req, res, next) => {
 
     next();
   } catch (err) {
-    return res.status(401).json({
-      error: "Invalid or expired token",
-    });
+    console.error('[Auth] JWT Verification Failed:', err.message);
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 };
 

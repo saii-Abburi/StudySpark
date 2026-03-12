@@ -9,7 +9,18 @@ const testSchema = new mongoose.Schema(
     subject: {
       type: String,
       required: true,
-      enum: ["biology", "chemistry", "physics", "maths"],
+      enum: ["biology", "chemistry", "physics", "maths", "engineering", "medical", "general"],
+    },
+    testType: {
+      type: String,
+      required: true,
+      enum: ["mock", "chapter-wise"],
+      default: "chapter-wise"
+    },
+    difficulty: {
+      type: String,
+      enum: ["easy", "medium", "hard", "mixed"],
+      default: "mixed"
     },
     category: {
       type: String,

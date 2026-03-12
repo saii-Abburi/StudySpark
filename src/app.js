@@ -21,7 +21,7 @@ app.use(cookieParser());
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: ["http://localhost:5173", "http://localhost:5174", "http://localhost:5175"],
     credentials: true,
   }),
 );
@@ -36,7 +36,13 @@ app.use(limiter);
 
 app.use("/", authRouter);
 app.use("/student", studentRoutes);
+// Register student extensions (e.g. bookmarks, report question, flashcards)
+app.use("/student", require("./routes/student.extensions"));
+
 app.use("/instructor", instructorRoutes);
+// Register instructor extensions (e.g. view reports, upload flashcards)
+app.use("/instructor", require("./routes/instructor.extensions"));
+
 app.use("/admin", adminRoutes);
 app.use("/resources", resourceRoutes);
 

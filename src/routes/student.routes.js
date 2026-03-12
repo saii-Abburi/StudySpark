@@ -14,8 +14,17 @@ const router = express.Router();
  */
 router.get("/tests", auth, allowRoles("student"), async (req, res) => {
   try {
-    const tests = await Test.find().select(
-      "title subject category duration totalMarks",
+    const { testType, category, subject, difficulty } = req.query;
+    
+    // Build filter object based on provided query parameters
+    const filter = {};
+    if (testType) filter.testType = testType;
+    if (category) filter.category = category;
+    if (subject) filter.subject = subject;
+    if (difficulty) filter.difficulty = difficulty;
+
+    const tests = await Test.find(filter).select(
+      "title subject category duration totalMarks testType difficulty",
     );
 
     res.status(200).json(tests);
@@ -70,6 +79,63 @@ router.post(
       res.status(500).json({ error: "Failed to start test", err: err.message });
     }
   },
+);
+
+/**
+ * GET /student/attempts
+ * Fetch all attempts for the current user
+ */
+router.get(
+  "/attempts",
+  auth,
+  allowRoles("student"),
+  async (req, res) => {
+    try {
+      const attempts = await TestAttempt.find({ user: req.user._id })
+        .populate("test", "title subject totalMarks duration")
+        .sort({ updatedAt: -1 });
+
+      res.status(200).json(attempts);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch attempts" });
+    }
+  }
+);
+
+/**
+ * GET /student/attempts/:attemptId
+ * Fetch an active attempt and its questions
+ */
+router.get(
+  "/attempts/:attemptId",
+  auth,
+  allowRoles("student"),
+  async (req, res) => {
+    try {
+      const attempt = await TestAttempt.findOne({
+        _id: req.params.attemptId,
+        user: req.user._id,
+      }).populate({
+        path: "test",
+        populate: {
+          path: "questions",
+          select: "questionText options marks negativeMarks difficulty",
+        },
+      });
+
+      if (!attempt) {
+        return res.status(404).json({ error: "Attempt not found" });
+      }
+
+      if (attempt.status !== "started") {
+        return res.status(400).json({ error: "This attempt is no longer active." });
+      }
+
+      res.status(200).json(attempt);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch attempt details" });
+    }
+  }
 );
 
 // POST /student/tests/:attemptId/submit
@@ -169,10 +235,19 @@ router.get(
       const attempt = await TestAttempt.findOne({
         _id: req.params.attemptId,
         user: req.user._id,
-      }).populate("test", "title subject");
+      })
+      .populate("test", "title subject duration")
+      .populate({
+        path: "answers.question",
+        select: "questionText options correctOption marks negativeMarks explanation"
+      });
 
       if (!attempt) {
         return res.status(404).json({ error: "Result not found" });
+      }
+
+      if (attempt.status !== "submitted") {
+        return res.status(403).json({ error: "You cannot view results before submitting the test." });
       }
 
       res.status(200).json(attempt);

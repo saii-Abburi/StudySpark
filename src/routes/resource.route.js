@@ -94,4 +94,60 @@ router.get("/:id/view", auth, async (req, res) => {
   }
 });
 
+/**
+ * GET /resources
+ * Get all available resources
+ */
+router.get("/", auth, async (req, res) => {
+  try {
+    const { subject, chapter } = req.query;
+    const filter = {};
+    if (subject) filter.subject = subject;
+    if (chapter) filter.chapter = chapter;
+
+    if (req.user.role === "student") {
+      // Students only see non-premium, or premium if they are in allowedUsers
+      filter.$or = [
+        { isPremium: false },
+        { allowedUsers: req.user._id }
+      ];
+    } else if (req.user.role === "instructor") {
+      // Instructor only sees their own uploads
+      filter.createdBy = req.user._id;
+    }
+
+    const resources = await Resource.find(filter).sort({ createdAt: -1 });
+    res.status(200).json(resources);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch resources" });
+  }
+});
+
+/**
+ * DELETE /resources/:id
+ * Instructor/Admin deletes a resource
+ */
+router.delete("/:id", auth, allowRoles("instructor", "admin"), async (req, res) => {
+  try {
+    const resource = await Resource.findById(req.params.id);
+    if (!resource) {
+      return res.status(404).json({ error: "Resource not found" });
+    }
+
+    // Checking ownership if not admin
+    if (req.user.role !== "admin" && resource.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: "You can only delete your own resources." });
+    }
+
+    if (fs.existsSync(resource.filePath)) {
+      fs.unlinkSync(resource.filePath); // Remove file from server
+    }
+    
+    await resource.deleteOne();
+    res.status(200).json({ message: "Resource deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete resource" });
+  }
+});
+
 module.exports = router;

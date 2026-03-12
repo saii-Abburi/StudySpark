@@ -38,13 +38,15 @@ router.post(
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { title, subject, category, duration } = req.body;
+      const { title, subject, category, duration, testType, difficulty } = req.body;
 
       const test = await Test.create({
         title,
         subject,
         category,
         duration,
+        testType: testType || 'chapter-wise',
+        difficulty: difficulty || 'mixed',
         totalMarks: 0,
         createdBy: req.user._id,
       });
@@ -222,6 +224,31 @@ router.post(
               })
               .filter(Boolean);
 
+            if (req.body.limits) {
+              try {
+                const limits = JSON.parse(req.body.limits);
+                const counts = { maths: 0, physics: 0, chemistry: 0, biology: 0 };
+                
+                // Shuffle array so we don't always pick the first questions
+                for (let i = questionsToInsert.length - 1; i > 0; i--) {
+                  const j = Math.floor(Math.random() * (i + 1));
+                  [questionsToInsert[i], questionsToInsert[j]] = [questionsToInsert[j], questionsToInsert[i]];
+                }
+
+                questionsToInsert = questionsToInsert.filter(q => {
+                   const sub = q.subject?.toLowerCase();
+                   if (!sub || !limits[sub] || limits[sub] <= 0) return true; // Keep if no limit or not tracked subject
+                   if (counts[sub] < parseInt(limits[sub], 10)) {
+                     counts[sub]++;
+                     return true;
+                   }
+                   return false;
+                });
+              } catch (e) {
+                console.warn('Failed to parse limits', e);
+              }
+            }
+
             if (!questionsToInsert.length) {
               return res.status(400).json({
                 error: "No valid questions found in CSV",
@@ -286,6 +313,34 @@ router.get(
 );
 
 /**
+ * GET /instructor/quizzes/:testId/questions
+ * Get specific test with all its questions populated
+ */
+router.get(
+  "/quizzes/:testId/questions",
+  auth,
+  allowRoles("instructor", "admin"),
+  async (req, res) => {
+    try {
+      const test = await Test.findById(req.params.testId).populate("questions");
+
+      if (!test) {
+        return res.status(404).json({ error: "Test not found" });
+      }
+
+      // Check ownership or admin
+      if (req.user.role !== "admin" && test.createdBy.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: "Unauthorized access to this test" });
+      }
+
+      res.status(200).json(test);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch test questions" });
+    }
+  }
+);
+
+/**
  * DELETE /instructor/quizzes/:testId
  */
 router.delete(
@@ -307,7 +362,8 @@ router.delete(
         message: "Test deleted successfully",
       });
     } catch (err) {
-      res.status(500).json({ error: "Failed to delete test" });
+      console.error("Test Deletion Error:", err);
+      res.status(500).json({ error: "Failed to delete test", details: err.message });
     }
   },
 );
